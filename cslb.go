@@ -43,11 +43,13 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, ttlSec
 func (lb *LoadBalancer) Next() (net.Addr, error) {
 	next, err := lb.strategy.Next()
 	if err != nil {
-		lb.NodeFailed(nil)
+		// Refresh and retry
+		<-lb.refresh()
 		next, err = lb.strategy.Next()
 	}
 	lived := time.Now().Unix() - atomic.LoadInt64(&lb.lastUpdate)
 	if lb.ttlSecond != TTLUnlimited && (lived > lb.ttlSecond || lived < 0) {
+		// Background refresh
 		lb.refresh()
 	}
 	return next, err

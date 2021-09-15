@@ -26,7 +26,7 @@ func TestRoundRobin(t *testing.T) {
 	}
 }
 
-func TestConcurrentRoundRobin(t *testing.T) {
+func Test4R4WRoundRobin(t *testing.T) {
 	rand.Seed(0)
 	s := roundRobinStrategy{}
 	s.SetNodes([]net.Addr{
@@ -36,7 +36,7 @@ func TestConcurrentRoundRobin(t *testing.T) {
 		&net.IPAddr{IP: net.IPv4(4, 5, 6, 7)},
 	})
 
-	// Concurrent read
+	// 4 concurrent read
 	for i := 0; i < 4; i++ {
 		go func() {
 			for {
@@ -46,7 +46,7 @@ func TestConcurrentRoundRobin(t *testing.T) {
 		}()
 	}
 
-	// Concurrent write
+	// 4 concurrent write
 	for i := 0; i < 4; i++ {
 		go func() {
 			for {
@@ -71,7 +71,9 @@ func BenchmarkRoundRobin(b *testing.B) {
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
 		&net.IPAddr{IP: net.IPv4(4, 5, 6, 7)},
 	})
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		s.Next()
 	}
+	b.StopTimer()
 }
