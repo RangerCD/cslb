@@ -1,6 +1,7 @@
 package cslb
 
 import (
+	"math"
 	"net"
 	"sync/atomic"
 	"time"
@@ -14,34 +15,39 @@ import (
 const (
 	NodeFailedKey = "node-failed."
 	RefreshKey    = "refresh"
+
+	TTLUnlimited = math.MaxInt64 // Never expire
+	TTLNone      = 0             // Refresh after every Next()
 )
 
 type LoadBalancer struct {
-	Service    service.Service
-	Strategy   strategy.Strategy
-	TTLSecond  int64
+	service    service.Service
+	strategy   strategy.Strategy
+	ttlSecond  int64
 	lastUpdate int64
 	sf         *singleflight.Group
 }
 
-func NewLoadBalancer(service service.Service, strategy strategy.Strategy) *LoadBalancer {
+func NewLoadBalancer(service service.Service, strategy strategy.Strategy, ttlSecond int64) *LoadBalancer {
 	lb := &LoadBalancer{
-		Service:  service,
-		Strategy: strategy,
-		sf:       new(singleflight.Group),
+		service:    service,
+		strategy:   strategy,
+		ttlSecond:  ttlSecond,
+		lastUpdate: 0,
+		sf:         new(singleflight.Group),
 	}
 	<-lb.refresh()
 	return lb
 }
 
 func (lb *LoadBalancer) Next() (net.Addr, error) {
-	next, err := lb.Strategy.Next()
+	next, err := lb.strategy.Next()
 	if err != nil {
 		lb.NodeFailed(nil)
-		next, err = lb.Strategy.Next()
+		next, err = lb.strategy.Next()
 	}
 	lived := time.Now().Unix() - atomic.LoadInt64(&lb.lastUpdate)
-	if lived > lb.TTLSecond || lived < 0 {
+	if lb.ttlSecond != TTLUnlimited && (lived > lb.ttlSecond || lived < 0) {
 		lb.refresh()
 	}
 	return next, err
@@ -49,17 +55,17 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 
 func (lb *LoadBalancer) NodeFailed(node net.Addr) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
-		lb.Service.NodeFailed(node)
-		lb.Strategy.SetNodes(lb.Service.Nodes())
+		lb.service.NodeFailed(node)
+		lb.strategy.SetNodes(lb.service.Nodes())
 		return nil, nil
 	})
 }
 
 func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
 	return lb.sf.DoChan(RefreshKey, func() (interface{}, error) {
-		lb.Service.Refresh()
+		lb.service.Refresh()
 		atomic.StoreInt64(&lb.lastUpdate, time.Now().Unix())
-		lb.Strategy.SetNodes(lb.Service.Nodes())
+		lb.strategy.SetNodes(lb.service.Nodes())
 		return nil, nil
 	})
 }
