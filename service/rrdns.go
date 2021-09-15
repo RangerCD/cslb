@@ -2,8 +2,7 @@ package service
 
 import (
 	"net"
-	"sync/atomic"
-	"unsafe"
+	"sync"
 )
 
 // rrDNSService is for Round-robin DNS load balancing solution.
@@ -17,43 +16,58 @@ import (
 //     ...
 // Everytime a client wants to send a request, one of these A records will be chosen to establish connection.
 type rrDNSService struct {
-	IPv4      bool
-	IPv6      bool
-	Hostnames []string
-	addrs     unsafe.Pointer // pointer to []net.Addr
+	ipv4      bool
+	ipv6      bool
+	hostnames []string
+	addrs     sync.Map // string => net.Addr
 }
 
 func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
 	return &rrDNSService{
-		IPv4:      ipv4,
-		IPv6:      ipv6,
-		Hostnames: hostnames,
-		addrs:     nil,
+		ipv4:      ipv4,
+		ipv6:      ipv6,
+		hostnames: hostnames,
+		addrs:     sync.Map{},
 	}
 }
 
 func (s *rrDNSService) Nodes() []net.Addr {
-	return *(*[]net.Addr)(atomic.LoadPointer(&s.addrs))
+	result := make([]net.Addr, 0)
+	s.addrs.Range(func(key, value interface{}) bool {
+		result = append(result, value.(net.Addr))
+		return true
+	})
+	return result
 }
 
 func (s *rrDNSService) NodeFailed(node net.Addr) {
-	// TODO: add rate limited refresh operation
+	s.addrs.Delete(node.String())
 }
 
 func (s *rrDNSService) Refresh() {
-	ips := make([]net.Addr, 0, len(s.Hostnames))
-	for _, h := range s.Hostnames {
+	ips := make(map[string]net.Addr, len(s.hostnames))
+	for _, h := range s.hostnames {
 		if results, err := net.LookupIP(h); err == nil {
 			for _, ip := range results {
 				switch {
-				case ip.To4() != nil && s.IPv4:
+				case ip.To4() != nil && s.ipv4:
 					fallthrough
-				case ip.To16() != nil && s.IPv6:
-					ips = append(ips, &net.IPAddr{IP: ip})
+				case ip.To16() != nil && s.ipv6:
+					ip := &net.IPAddr{IP: ip}
+					ips[ip.String()] = ip
 				}
 			}
 		}
 	}
 
-	atomic.StorePointer(&s.addrs, unsafe.Pointer(&ips))
+	for k, v := range ips {
+		s.addrs.Store(k, v)
+	}
+
+	s.addrs.Range(func(key, value interface{}) bool {
+		if _, ok := ips[key.(string)]; !ok {
+			s.addrs.Delete(key)
+		}
+		return true
+	})
 }

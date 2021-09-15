@@ -56,7 +56,12 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 func (lb *LoadBalancer) NodeFailed(node net.Addr) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
 		lb.service.NodeFailed(node)
-		lb.strategy.SetNodes(lb.service.Nodes())
+		nodes := lb.service.Nodes()
+		if len(nodes) <= 0 {
+			<-lb.refresh()
+		} else {
+			lb.strategy.SetNodes(nodes)
+		}
 		return nil, nil
 	})
 }
