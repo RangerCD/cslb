@@ -2,34 +2,34 @@ package strategy
 
 import (
 	"errors"
+	"math"
 	"net"
 	"sync/atomic"
 	"unsafe"
 )
 
 type roundRobinStrategy struct {
-	nodesChan unsafe.Pointer // pointer to chan net.Addr
+	index uint64
+	nodes unsafe.Pointer // pointer to []net.Addr
 }
 
 func NewRoundRobinStrategy() *roundRobinStrategy {
-	return &roundRobinStrategy{}
+	return &roundRobinStrategy{
+		index: math.MaxUint64,
+		nodes: nil,
+	}
 }
 
 func (s *roundRobinStrategy) SetNodes(addrs []net.Addr) {
-	nodes := make(chan net.Addr, len(addrs))
-	for _, addr := range addrs {
-		nodes <- addr
-	}
-	atomic.StorePointer(&s.nodesChan, unsafe.Pointer(&nodes))
+	atomic.StorePointer(&s.nodes, unsafe.Pointer(&addrs))
 }
 
 func (s *roundRobinStrategy) Next() (net.Addr, error) {
-	nodesChan := (*chan net.Addr)(atomic.LoadPointer(&s.nodesChan))
-	select {
-	case addr := <-*nodesChan:
-		*nodesChan <- addr
-		return addr, nil
-	default:
+	nodes := (*[]net.Addr)(atomic.LoadPointer(&s.nodes))
+	if len(*nodes) > 0 {
+		index := atomic.AddUint64(&s.index, 1) % uint64(len(*nodes))
+		return (*nodes)[index], nil
+	} else {
 		return nil, errors.New("empty node list")
 	}
 }
