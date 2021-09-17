@@ -16,25 +16,26 @@ import (
 const (
 	NodeFailedKey = "node-failed."
 	RefreshKey    = "refresh"
-
-	TTLUnlimited = math.MaxInt64 // Never expire
-	TTLNone      = 0             // Refresh after every Next()
 )
 
 type LoadBalancer struct {
 	service    service.Service
 	strategy   strategy.Strategy
-	ttlSecond  int64
+	option     LoadBalancerOption
 	lastUpdate int64
 	sf         *singleflight.Group
 	nodes      *node.Group
 }
 
-func NewLoadBalancer(service service.Service, strategy strategy.Strategy, ttlSecond int64) *LoadBalancer {
+func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option ...LoadBalancerOption) *LoadBalancer {
+	opt := DefaultLoadBalancerOption
+	if len(option) > 0 {
+		opt = option[0]
+	}
 	lb := &LoadBalancer{
 		service:    service,
 		strategy:   strategy,
-		ttlSecond:  ttlSecond,
+		option:     opt,
 		lastUpdate: 0,
 		sf:         new(singleflight.Group),
 		nodes:      node.NewGroup(),
@@ -51,8 +52,8 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 		next, err = lb.strategy.Next()
 	}
 	// TODO: replace with time.Timer, it's too heavy for Next()
-	lived := time.Now().Unix() - atomic.LoadInt64(&lb.lastUpdate)
-	if lb.ttlSecond != TTLUnlimited && (lived > lb.ttlSecond || lived < 0) {
+	lived := time.Duration(time.Now().Unix()-atomic.LoadInt64(&lb.lastUpdate)) * time.Second
+	if lb.option.TTL != TTLUnlimited && (lived > lb.option.TTL || lived < 0) {
 		// Background refresh
 		lb.refresh()
 	}
@@ -61,12 +62,14 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 
 func (lb *LoadBalancer) NodeFailed(node net.Addr) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
+		// TODO: allow fail several times before exile
 		lb.nodes.Exile(node)
 		if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
 			go fn(node)
 		}
 		nodes := lb.nodes.Get()
-		if len(nodes) <= 0 {
+		if len(nodes) <= 0 ||
+			math.Round(float64(lb.nodes.GetOriginalCount())*lb.option.MinHealthyNodeRatio) > float64(lb.nodes.GetCurrentCount()) {
 			<-lb.refresh()
 		} else {
 			lb.strategy.SetNodes(nodes)

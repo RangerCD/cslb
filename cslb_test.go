@@ -24,7 +24,6 @@ func TestCSLB(t *testing.T) {
 	lb := NewLoadBalancer(
 		srv,
 		stg,
-		TTLUnlimited,
 	)
 
 	nodes := srv.Nodes()
@@ -48,7 +47,6 @@ func Test100RCSLB(t *testing.T) {
 	lb := NewLoadBalancer(
 		srv,
 		stg,
-		TTLUnlimited,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -87,7 +85,6 @@ func Test100RCSLBRandomFail(t *testing.T) {
 	lb := NewLoadBalancer(
 		srv,
 		stg,
-		TTLUnlimited,
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -129,7 +126,6 @@ func BenchmarkCSLB(b *testing.B) {
 	lb := NewLoadBalancer(
 		srv,
 		stg,
-		TTLUnlimited,
 	)
 
 	b.StartTimer()
