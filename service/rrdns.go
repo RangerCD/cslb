@@ -2,7 +2,8 @@ package service
 
 import (
 	"net"
-	"sync"
+	"sync/atomic"
+	"unsafe"
 )
 
 // rrDNSService is for Round-robin DNS load balancing solution.
@@ -19,7 +20,7 @@ type rrDNSService struct {
 	ipv4      bool
 	ipv6      bool
 	hostnames []string
-	addrs     sync.Map // string => net.Addr
+	addrs     unsafe.Pointer // Pointer to []net.Addr
 }
 
 func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
@@ -27,25 +28,23 @@ func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
 		ipv4:      ipv4,
 		ipv6:      ipv6,
 		hostnames: hostnames,
-		addrs:     sync.Map{},
+		addrs:     nil,
 	}
 }
 
 func (s *rrDNSService) Nodes() []net.Addr {
-	result := make([]net.Addr, 0)
-	s.addrs.Range(func(key, value interface{}) bool {
-		result = append(result, value.(net.Addr))
-		return true
-	})
+	addrs := (*[]net.Addr)(atomic.LoadPointer(&s.addrs))
+	result := make([]net.Addr, 0, len(*addrs))
+	result = append(result, *addrs...)
 	return result
 }
 
-func (s *rrDNSService) NodeFailed(node net.Addr) {
-	s.addrs.Delete(node.String())
+func (s *rrDNSService) NodeFailedCallbackFunc() func(addr net.Addr) {
+	return nil
 }
 
 func (s *rrDNSService) Refresh() {
-	ips := make(map[string]net.Addr, len(s.hostnames))
+	ips := make([]net.Addr, 0, len(s.hostnames))
 	for _, h := range s.hostnames {
 		if results, err := net.LookupIP(h); err == nil {
 			for _, ip := range results {
@@ -53,21 +52,10 @@ func (s *rrDNSService) Refresh() {
 				case ip.To4() != nil && s.ipv4:
 					fallthrough
 				case ip.To16() != nil && s.ipv6:
-					ip := &net.IPAddr{IP: ip}
-					ips[ip.String()] = ip
+					ips = append(ips, &net.IPAddr{IP: ip})
 				}
 			}
 		}
 	}
-
-	for k, v := range ips {
-		s.addrs.Store(k, v)
-	}
-
-	s.addrs.Range(func(key, value interface{}) bool {
-		if _, ok := ips[key.(string)]; !ok {
-			s.addrs.Delete(key)
-		}
-		return true
-	})
+	atomic.StorePointer(&s.addrs, (unsafe.Pointer)(&ips))
 }

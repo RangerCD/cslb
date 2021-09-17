@@ -8,6 +8,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
+	"github.com/RangerCD/cslb/node"
 	"github.com/RangerCD/cslb/service"
 	"github.com/RangerCD/cslb/strategy"
 )
@@ -26,6 +27,7 @@ type LoadBalancer struct {
 	ttlSecond  int64
 	lastUpdate int64
 	sf         *singleflight.Group
+	nodes      *node.Group
 }
 
 func NewLoadBalancer(service service.Service, strategy strategy.Strategy, ttlSecond int64) *LoadBalancer {
@@ -35,6 +37,7 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, ttlSec
 		ttlSecond:  ttlSecond,
 		lastUpdate: 0,
 		sf:         new(singleflight.Group),
+		nodes:      node.NewGroup(),
 	}
 	<-lb.refresh()
 	return lb
@@ -47,6 +50,7 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 		<-lb.refresh()
 		next, err = lb.strategy.Next()
 	}
+	// TODO: replace with time.Timer, it's too heavy for Next()
 	lived := time.Now().Unix() - atomic.LoadInt64(&lb.lastUpdate)
 	if lb.ttlSecond != TTLUnlimited && (lived > lb.ttlSecond || lived < 0) {
 		// Background refresh
@@ -57,8 +61,11 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 
 func (lb *LoadBalancer) NodeFailed(node net.Addr) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
-		lb.service.NodeFailed(node)
-		nodes := lb.service.Nodes()
+		lb.nodes.Exile(node)
+		if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
+			go fn(node)
+		}
+		nodes := lb.nodes.Get()
 		if len(nodes) <= 0 {
 			<-lb.refresh()
 		} else {
@@ -72,7 +79,8 @@ func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
 	return lb.sf.DoChan(RefreshKey, func() (interface{}, error) {
 		lb.service.Refresh()
 		atomic.StoreInt64(&lb.lastUpdate, time.Now().Unix())
-		lb.strategy.SetNodes(lb.service.Nodes())
+		lb.nodes.Set(lb.service.Nodes())
+		lb.strategy.SetNodes(lb.nodes.Get())
 		return nil, nil
 	})
 }
