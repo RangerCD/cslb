@@ -3,7 +3,6 @@ package cslb
 import (
 	"math"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -19,12 +18,13 @@ const (
 )
 
 type LoadBalancer struct {
-	service    service.Service
-	strategy   strategy.Strategy
-	option     LoadBalancerOption
-	lastUpdate int64
-	sf         *singleflight.Group
-	nodes      *node.Group
+	service  service.Service
+	strategy strategy.Strategy
+	option   LoadBalancerOption
+
+	sf       *singleflight.Group
+	nodes    *node.Group
+	ttlTimer *time.Timer
 }
 
 func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option ...LoadBalancerOption) *LoadBalancer {
@@ -32,15 +32,21 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 	if len(option) > 0 {
 		opt = option[0]
 	}
+
 	lb := &LoadBalancer{
-		service:    service,
-		strategy:   strategy,
-		option:     opt,
-		lastUpdate: 0,
-		sf:         new(singleflight.Group),
-		nodes:      node.NewGroup(opt.MaxNodeCount),
+		service:  service,
+		strategy: strategy,
+		option:   opt,
+		sf:       new(singleflight.Group),
+		nodes:    node.NewGroup(opt.MaxNodeCount),
+		ttlTimer: nil,
 	}
 	<-lb.refresh()
+
+	if lb.option.TTL != TTLUnlimited {
+		lb.ttlTimer = time.NewTimer(lb.option.TTL)
+	}
+
 	return lb
 }
 
@@ -51,12 +57,17 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 		<-lb.refresh()
 		next, err = lb.strategy.Next()
 	}
-	// TODO: replace with time.Timer, it's too heavy for Next()
-	lived := time.Duration(time.Now().Unix()-atomic.LoadInt64(&lb.lastUpdate)) * time.Second
-	if lb.option.TTL != TTLUnlimited && (lived > lb.option.TTL || lived < 0) {
-		// Background refresh
-		lb.refresh()
+
+	// Check TTL
+	if lb.ttlTimer != nil {
+		select {
+		case <-lb.ttlTimer.C:
+			// Background refresh
+			lb.refresh()
+		default:
+		}
 	}
+
 	return next, err
 }
 
@@ -81,7 +92,15 @@ func (lb *LoadBalancer) NodeFailed(node net.Addr) {
 func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
 	return lb.sf.DoChan(RefreshKey, func() (interface{}, error) {
 		lb.service.Refresh()
-		atomic.StoreInt64(&lb.lastUpdate, time.Now().Unix())
+
+		if lb.ttlTimer != nil {
+			select {
+			case <-lb.ttlTimer.C:
+			default:
+			}
+			lb.ttlTimer.Reset(lb.option.TTL)
+		}
+
 		lb.nodes.Set(lb.service.Nodes())
 		lb.strategy.SetNodes(lb.nodes.Get())
 		return nil, nil
