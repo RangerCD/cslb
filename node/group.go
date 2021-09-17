@@ -1,22 +1,30 @@
 package node
 
 import (
+	"math"
 	"net"
 	"sync"
 	"sync/atomic"
+)
+
+const (
+	NodeCountUnlimited = math.MaxInt64
 )
 
 type Group struct {
 	m             sync.Map // string => *Node
 	originalCount int64
 	currentCount  int64
+
+	maxNodeCount int
 }
 
-func NewGroup() *Group {
+func NewGroup(maxNodeCount int) *Group {
 	return &Group{
 		m:             sync.Map{},
 		originalCount: 0,
 		currentCount:  0,
+		maxNodeCount:  maxNodeCount,
 	}
 }
 
@@ -44,6 +52,9 @@ func (g *Group) Get() []net.Addr {
 	result := make([]net.Addr, 0)
 	g.m.Range(func(key, value interface{}) bool {
 		result = append(result, value.(*Node).Addr())
+		if len(result) >= g.maxNodeCount {
+			return false
+		}
 		return true
 	})
 	return result

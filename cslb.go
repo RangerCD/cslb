@@ -38,7 +38,7 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 		option:     opt,
 		lastUpdate: 0,
 		sf:         new(singleflight.Group),
-		nodes:      node.NewGroup(),
+		nodes:      node.NewGroup(opt.MaxNodeCount),
 	}
 	<-lb.refresh()
 	return lb

@@ -16,7 +16,7 @@ func TestGroup(t *testing.T) {
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
 		&net.IPAddr{IP: net.IPv4(4, 5, 6, 7)},
 	}
-	g := NewGroup()
+	g := NewGroup(NodeCountUnlimited)
 
 	g.Set(example)
 	actual = g.Get()

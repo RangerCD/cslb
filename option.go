@@ -3,6 +3,8 @@ package cslb
 import (
 	"math"
 	"time"
+
+	"github.com/RangerCD/cslb/node"
 )
 
 const (
@@ -15,12 +17,19 @@ const (
 
 var (
 	DefaultLoadBalancerOption = LoadBalancerOption{
+		MaxNodeCount:        node.NodeCountUnlimited,
 		TTL:                 TTLUnlimited,
 		MinHealthyNodeRatio: HealthyNodeAny,
 	}
 )
 
 type LoadBalancerOption struct {
+	// LoadBalancer will keep MaxNodeCount nodes in Next() result set
+	// Please notice that refresh or exile will change the result set
+	// Number of connections might be greater than this value, if any pre-connected node has been excluded in newer
+	// result set, but no new connection will be established to these nodes
+	MaxNodeCount int
+
 	// Cache TTL
 	TTL time.Duration
 
