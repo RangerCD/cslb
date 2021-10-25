@@ -9,7 +9,7 @@ Client-Side Load Balancer
 - [ ] Multiple client-side load balancing solutions support
   - [x] [Round-Robin DNS](https://en.wikipedia.org/wiki/Round-robin_DNS)
   - [ ] [SRV DNS](https://en.wikipedia.org/wiki/SRV_record)
-  - [ ] Static Node List
+  - [x] Static Node List
 - [ ] Multiple distributing strategies
   - [x] Round-Robin
   - [ ] Weighted Round-Robin
