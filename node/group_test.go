@@ -9,8 +9,8 @@ import (
 )
 
 func TestGroup(t *testing.T) {
-	var actual []net.Addr
-	example := []net.Addr{
+	var actual []Node
+	example := []Node{
 		&net.IPAddr{IP: net.IPv4(1, 2, 3, 4)},
 		&net.IPAddr{IP: net.IPv4(2, 3, 4, 5)},
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
@@ -30,7 +30,7 @@ func TestGroup(t *testing.T) {
 	sort.Slice(actual, func(i, j int) bool {
 		return actual[i].String() < actual[j].String()
 	})
-	assert.Equal(t, []net.Addr{
+	assert.Equal(t, []Node{
 		&net.IPAddr{IP: net.IPv4(2, 3, 4, 5)},
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
 		&net.IPAddr{IP: net.IPv4(4, 5, 6, 7)},

@@ -3,14 +3,15 @@ package strategy
 import (
 	"errors"
 	"math"
-	"net"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/RangerCD/cslb/node"
 )
 
 type roundRobinStrategy struct {
 	index uint64
-	nodes unsafe.Pointer // pointer to []net.Addr
+	nodes unsafe.Pointer // pointer to []node.Node
 }
 
 func NewRoundRobinStrategy() *roundRobinStrategy {
@@ -20,12 +21,12 @@ func NewRoundRobinStrategy() *roundRobinStrategy {
 	}
 }
 
-func (s *roundRobinStrategy) SetNodes(addrs []net.Addr) {
-	atomic.StorePointer(&s.nodes, unsafe.Pointer(&addrs))
+func (s *roundRobinStrategy) SetNodes(nodes []node.Node) {
+	atomic.StorePointer(&s.nodes, unsafe.Pointer(&nodes))
 }
 
-func (s *roundRobinStrategy) Next() (net.Addr, error) {
-	nodes := (*[]net.Addr)(atomic.LoadPointer(&s.nodes))
+func (s *roundRobinStrategy) Next() (node.Node, error) {
+	nodes := (*[]node.Node)(atomic.LoadPointer(&s.nodes))
 	if len(*nodes) > 0 {
 		index := atomic.AddUint64(&s.index, 1) % uint64(len(*nodes))
 		return (*nodes)[index], nil

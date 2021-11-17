@@ -2,7 +2,6 @@ package cslb
 
 import (
 	"math"
-	"net"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -50,7 +49,7 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 	return lb
 }
 
-func (lb *LoadBalancer) Next() (net.Addr, error) {
+func (lb *LoadBalancer) Next() (node.Node, error) {
 	next, err := lb.strategy.Next()
 	if err != nil {
 		// Refresh and retry
@@ -71,7 +70,7 @@ func (lb *LoadBalancer) Next() (net.Addr, error) {
 	return next, err
 }
 
-func (lb *LoadBalancer) NodeFailed(node net.Addr) {
+func (lb *LoadBalancer) NodeFailed(node node.Node) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
 		// TODO: allow fail several times before exile
 		lb.nodes.Exile(node)
