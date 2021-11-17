@@ -2,7 +2,6 @@ package node
 
 import (
 	"math"
-	"net"
 	"sync"
 	"sync/atomic"
 )
@@ -28,11 +27,10 @@ func NewGroup(maxNodeCount int) *Group {
 	}
 }
 
-func (g *Group) Set(addrs []net.Addr) {
-	nodesCheck := make(map[string]struct{}, len(addrs))
-	for _, addr := range addrs {
-		node := NewNode(addr)
-		key := node.Key()
+func (g *Group) Set(nodes []Node) {
+	nodesCheck := make(map[string]struct{}, len(nodes))
+	for _, node := range nodes {
+		key := node.String()
 		nodesCheck[key] = struct{}{}
 		g.m.Store(key, node)
 	}
@@ -44,14 +42,14 @@ func (g *Group) Set(addrs []net.Addr) {
 		return true
 	})
 
-	atomic.StoreInt64(&g.originalCount, int64(len(addrs)))
-	atomic.StoreInt64(&g.currentCount, int64(len(addrs)))
+	atomic.StoreInt64(&g.originalCount, int64(len(nodes)))
+	atomic.StoreInt64(&g.currentCount, int64(len(nodes)))
 }
 
-func (g *Group) Get() []net.Addr {
-	result := make([]net.Addr, 0)
+func (g *Group) Get() []Node {
+	result := make([]Node, 0)
 	g.m.Range(func(key, value interface{}) bool {
-		result = append(result, value.(*Node).Addr())
+		result = append(result, value.(Node))
 		if len(result) >= g.maxNodeCount {
 			return false
 		}
@@ -60,9 +58,9 @@ func (g *Group) Get() []net.Addr {
 	return result
 }
 
-func (g *Group) GetNode(key string) *Node {
+func (g *Group) GetNode(key string) Node {
 	if val, loaded := g.m.Load(key); loaded {
-		return (val).(*Node)
+		return (val).(Node)
 	}
 	return nil
 }
@@ -75,8 +73,8 @@ func (g *Group) GetCurrentCount() int64 {
 	return atomic.LoadInt64(&g.currentCount)
 }
 
-func (g *Group) Exile(addr net.Addr) bool {
-	_, loaded := g.m.LoadAndDelete(addr.String())
+func (g *Group) Exile(node Node) bool {
+	_, loaded := g.m.LoadAndDelete(node.String())
 	if loaded {
 		atomic.AddInt64(&g.currentCount, -1)
 	}

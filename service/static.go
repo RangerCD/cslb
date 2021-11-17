@@ -1,35 +1,37 @@
 package service
 
 import (
-	"net"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/RangerCD/cslb/node"
 )
 
 // staticService represents a simple static list of net.Addr
+// Node type: node.Node
 type staticService struct {
-	staticAddrs []net.Addr
-	addrs       unsafe.Pointer // Pointer to []net.Addr
+	staticNodes []node.Node
+	nodes       unsafe.Pointer // Pointer to []node.Node
 }
 
-func NewStaticService(addrs []net.Addr) *staticService {
+func NewStaticService(nodes []node.Node) *staticService {
 	return &staticService{
-		staticAddrs: addrs,
-		addrs:       nil,
+		staticNodes: nodes,
+		nodes:       nil,
 	}
 }
 
-func (s *staticService) Nodes() []net.Addr {
-	addrs := (*[]net.Addr)(atomic.LoadPointer(&s.addrs))
-	result := make([]net.Addr, 0, len(*addrs))
-	result = append(result, *addrs...)
+func (s *staticService) Nodes() []node.Node {
+	nodes := (*[]node.Node)(atomic.LoadPointer(&s.nodes))
+	result := make([]node.Node, 0, len(*nodes))
+	result = append(result, *nodes...)
 	return result
 }
 
 func (s *staticService) Refresh() {
-	atomic.StorePointer(&s.addrs, (unsafe.Pointer)(&s.staticAddrs))
+	atomic.StorePointer(&s.nodes, (unsafe.Pointer)(&s.staticNodes))
 }
 
-func (s *staticService) NodeFailedCallbackFunc() func(addr net.Addr) {
+func (s *staticService) NodeFailedCallbackFunc() func(node node.Node) {
 	return nil
 }

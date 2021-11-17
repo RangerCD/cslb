@@ -4,11 +4,13 @@ import (
 	"log"
 	"net"
 	"testing"
+
+	"github.com/RangerCD/cslb/node"
 )
 
 func TestStaticService(t *testing.T) {
 	s := NewStaticService(
-		[]net.Addr{
+		[]node.Node{
 			&net.TCPAddr{
 				IP:   net.IPv4(1, 2, 3, 4),
 				Port: 1234,

@@ -4,10 +4,13 @@ import (
 	"net"
 	"sync/atomic"
 	"unsafe"
+
+	"github.com/RangerCD/cslb/node"
 )
 
 // rrDNSService is for Round-robin DNS load balancing solution.
 // Usually multiple A or AAAA records are associated with single hostname.
+// Node type: *net.IPAddr
 //
 // For example:
 //   Hostname www.a.com
@@ -20,7 +23,7 @@ type rrDNSService struct {
 	ipv4      bool
 	ipv6      bool
 	hostnames []string
-	addrs     unsafe.Pointer // Pointer to []net.Addr
+	nodes     unsafe.Pointer // Pointer to []*net.IPAddr
 }
 
 func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
@@ -28,23 +31,25 @@ func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
 		ipv4:      ipv4,
 		ipv6:      ipv6,
 		hostnames: hostnames,
-		addrs:     nil,
+		nodes:     nil,
 	}
 }
 
-func (s *rrDNSService) Nodes() []net.Addr {
-	addrs := (*[]net.Addr)(atomic.LoadPointer(&s.addrs))
-	result := make([]net.Addr, 0, len(*addrs))
-	result = append(result, *addrs...)
+func (s *rrDNSService) Nodes() []node.Node {
+	nodes := (*[]*net.IPAddr)(atomic.LoadPointer(&s.nodes))
+	result := make([]node.Node, 0, len(*nodes))
+	for _, n := range *nodes {
+		result = append(result, n)
+	}
 	return result
 }
 
-func (s *rrDNSService) NodeFailedCallbackFunc() func(addr net.Addr) {
+func (s *rrDNSService) NodeFailedCallbackFunc() func(node node.Node) {
 	return nil
 }
 
 func (s *rrDNSService) Refresh() {
-	ips := make([]net.Addr, 0, len(s.hostnames))
+	ips := make([]*net.IPAddr, 0, len(s.hostnames))
 	for _, h := range s.hostnames {
 		if results, err := net.LookupIP(h); err == nil {
 			for _, ip := range results {
@@ -57,5 +62,5 @@ func (s *rrDNSService) Refresh() {
 			}
 		}
 	}
-	atomic.StorePointer(&s.addrs, (unsafe.Pointer)(&ips))
+	atomic.StorePointer(&s.nodes, (unsafe.Pointer)(&ips))
 }
