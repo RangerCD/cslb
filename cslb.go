@@ -5,10 +5,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/singleflight"
-
-	"github.com/RangerCD/cslb/node"
-	"github.com/RangerCD/cslb/service"
-	"github.com/RangerCD/cslb/strategy"
 )
 
 const (
@@ -17,16 +13,16 @@ const (
 )
 
 type LoadBalancer struct {
-	service  service.Service
-	strategy strategy.Strategy
+	service  Service
+	strategy Strategy
 	option   LoadBalancerOption
 
 	sf       *singleflight.Group
-	nodes    *node.Group
+	nodes    *Group
 	ttlTimer *time.Timer
 }
 
-func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option ...LoadBalancerOption) *LoadBalancer {
+func NewLoadBalancer(service Service, strategy Strategy, option ...LoadBalancerOption) *LoadBalancer {
 	opt := DefaultLoadBalancerOption
 	if len(option) > 0 {
 		opt = option[0]
@@ -37,7 +33,7 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 		strategy: strategy,
 		option:   opt,
 		sf:       new(singleflight.Group),
-		nodes:    node.NewGroup(opt.MaxNodeCount),
+		nodes:    NewGroup(opt.MaxNodeCount),
 		ttlTimer: nil,
 	}
 	<-lb.refresh()
@@ -49,7 +45,7 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 	return lb
 }
 
-func (lb *LoadBalancer) Next() (node.Node, error) {
+func (lb *LoadBalancer) Next() (Node, error) {
 	next, err := lb.strategy.Next()
 	if err != nil {
 		// Refresh and retry
@@ -70,7 +66,7 @@ func (lb *LoadBalancer) Next() (node.Node, error) {
 	return next, err
 }
 
-func (lb *LoadBalancer) NodeFailed(node node.Node) {
+func (lb *LoadBalancer) NodeFailed(node Node) {
 	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
 		// TODO: allow fail several times before exile
 		lb.nodes.Exile(node)

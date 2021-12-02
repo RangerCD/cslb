@@ -9,18 +9,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/RangerCD/cslb/service"
-	"github.com/RangerCD/cslb/strategy"
 )
 
 func TestCSLB(t *testing.T) {
-	srv := service.NewRRDNSService(
+	srv := NewRRDNSService(
 		[]string{
 			"example.com",
 		}, true, true,
 	)
-	stg := strategy.NewRoundRobinStrategy()
+	stg := NewRoundRobinStrategy()
 	lb := NewLoadBalancer(
 		srv,
 		stg,
@@ -38,12 +35,12 @@ func TestCSLB(t *testing.T) {
 
 func Test100RCSLB(t *testing.T) {
 	var counter uint64 = 0
-	srv := service.NewRRDNSService(
+	srv := NewRRDNSService(
 		[]string{
 			"example.com",
 		}, true, true,
 	)
-	stg := strategy.NewRoundRobinStrategy()
+	stg := NewRoundRobinStrategy()
 	lb := NewLoadBalancer(
 		srv,
 		stg,
@@ -76,12 +73,12 @@ func Test100RCSLB(t *testing.T) {
 func Test100RCSLBRandomFail(t *testing.T) {
 	var counter uint64 = 0
 	var failedCounter uint64 = 0
-	srv := service.NewRRDNSService(
+	srv := NewRRDNSService(
 		[]string{
 			"example.com",
 		}, true, true,
 	)
-	stg := strategy.NewRoundRobinStrategy()
+	stg := NewRoundRobinStrategy()
 	lb := NewLoadBalancer(
 		srv,
 		stg,
@@ -117,12 +114,12 @@ func Test100RCSLBRandomFail(t *testing.T) {
 }
 
 func BenchmarkCSLB(b *testing.B) {
-	srv := service.NewRRDNSService(
+	srv := NewRRDNSService(
 		[]string{
 			"example.com",
 		}, true, true,
 	)
-	stg := strategy.NewRoundRobinStrategy()
+	stg := NewRoundRobinStrategy()
 	lb := NewLoadBalancer(
 		srv,
 		stg,

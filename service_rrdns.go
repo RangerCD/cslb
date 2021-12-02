@@ -1,11 +1,9 @@
-package service
+package cslb
 
 import (
 	"net"
 	"sync/atomic"
 	"unsafe"
-
-	"github.com/RangerCD/cslb/node"
 )
 
 // rrDNSService is for Round-robin DNS load balancing solution.
@@ -35,16 +33,16 @@ func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
 	}
 }
 
-func (s *rrDNSService) Nodes() []node.Node {
+func (s *rrDNSService) Nodes() []Node {
 	nodes := (*[]*net.IPAddr)(atomic.LoadPointer(&s.nodes))
-	result := make([]node.Node, 0, len(*nodes))
+	result := make([]Node, 0, len(*nodes))
 	for _, n := range *nodes {
 		result = append(result, n)
 	}
 	return result
 }
 
-func (s *rrDNSService) NodeFailedCallbackFunc() func(node node.Node) {
+func (s *rrDNSService) NodeFailedCallbackFunc() func(node Node) {
 	return nil
 }
 

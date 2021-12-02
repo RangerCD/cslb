@@ -28,14 +28,12 @@ import (
 	"log"
 	
 	"github.com/RangerCD/cslb"
-	"github.com/RangerCD/cslb/service"
-	"github.com/RangerCD/cslb/strategy"
 )
 
 func main() {
 	lb := cslb.NewLoadBalancer(
-		service.NewRRDNSService([]string{"example.com"}, true, true),
-		strategy.NewRoundRobinStrategy(),
+		cslb.NewRRDNSService([]string{"example.com"}, true, true), 
+		cslb.NewRoundRobinStrategy(),
 	)
 
 	log.Println(lb.Next()) // IP 1

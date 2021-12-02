@@ -3,8 +3,6 @@ package cslb
 import (
 	"math"
 	"time"
-
-	"github.com/RangerCD/cslb/node"
 )
 
 const (
@@ -17,7 +15,7 @@ const (
 
 var (
 	DefaultLoadBalancerOption = LoadBalancerOption{
-		MaxNodeCount:        node.NodeCountUnlimited,
+		MaxNodeCount:        NodeCountUnlimited,
 		TTL:                 TTLUnlimited,
 		MinHealthyNodeRatio: HealthyNodeAny,
 	}
