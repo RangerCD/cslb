@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"math/rand"
+	"net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -111,6 +112,64 @@ func Test100RCSLBRandomFail(t *testing.T) {
 
 	log.Println("Next() called", counter, "times")
 	log.Println("NodeFailed() called", failedCounter, "times")
+}
+
+func TestFailedRatio(t *testing.T) {
+	nodes := []Node{
+		&net.TCPAddr{
+			IP:   net.IPv4(1, 2, 3, 4),
+			Port: 1234,
+		},
+		&net.TCPAddr{
+			IP:   net.IPv4(2, 3, 4, 5),
+			Port: 2345,
+		},
+	}
+	srv := NewStaticService(nodes)
+	stg := NewRoundRobinStrategy()
+	lb := NewLoadBalancer(
+		srv,
+		stg,
+		LoadBalancerOption{
+			MaxNodeCount:       NodeCountUnlimited,
+			TTL:                TTLUnlimited,
+			MaxNodeFailedRatio: 0.2,
+			MinSampleSize:      10,
+		},
+	)
+	failOrder := []bool{
+		// 0-9
+		false, false, false, false, false, false, true, false, false, true,
+		// 10-19
+		true, false, false, false, false, false, false, false, false, false,
+	}
+	exiled := []bool{
+		// 0-9
+		false, false, false, false, false, false, false, false, false, false,
+		// 10-19
+		false, true, true, true, true, true, true, true, true, true,
+	}
+
+	// test refresh for 2 rounds
+	for k := 0; k < 2; k++ {
+		for i := 0; i < 20; i++ {
+			actual := make([]string, 0, 2)
+			for j := 0; j < len(nodes); j++ {
+				node, err := lb.Next()
+				assert.Nil(t, err)
+				actual = append(actual, node.String())
+			}
+			if exiled[i] {
+				assert.NotContains(t, actual, nodes[1].String())
+			} else {
+				assert.Contains(t, actual, nodes[1].String())
+			}
+			if failOrder[i] {
+				lb.NodeFailed(nodes[1])
+			}
+		}
+		<-lb.refresh()
+	}
 }
 
 func BenchmarkCSLB(b *testing.B) {

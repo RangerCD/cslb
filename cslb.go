@@ -20,6 +20,8 @@ type LoadBalancer struct {
 	sf       *singleflight.Group
 	nodes    *Group
 	ttlTimer *time.Timer
+
+	metrics *Metrics
 }
 
 func NewLoadBalancer(service Service, strategy Strategy, option ...LoadBalancerOption) *LoadBalancer {
@@ -35,6 +37,7 @@ func NewLoadBalancer(service Service, strategy Strategy, option ...LoadBalancerO
 		sf:       new(singleflight.Group),
 		nodes:    NewGroup(opt.MaxNodeCount),
 		ttlTimer: nil,
+		metrics:  NewMetrics(opt.MaxNodeFailedRatio, opt.MinSampleSize),
 	}
 	<-lb.refresh()
 
@@ -63,25 +66,37 @@ func (lb *LoadBalancer) Next() (Node, error) {
 		}
 	}
 
+	if lb.metrics != nil {
+		lb.metrics.NodeInc(next)
+	}
+
 	return next, err
 }
 
 func (lb *LoadBalancer) NodeFailed(node Node) {
-	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
-		// TODO: allow fail several times before exile
-		lb.nodes.Exile(node)
-		if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
-			go fn(node)
-		}
-		nodes := lb.nodes.Get()
-		if len(nodes) <= 0 ||
-			math.Round(float64(lb.nodes.GetOriginalCount())*lb.option.MinHealthyNodeRatio) > float64(lb.nodes.GetCurrentCount()) {
-			<-lb.refresh()
-		} else {
-			lb.strategy.SetNodes(nodes)
-		}
-		return nil, nil
-	})
+	if lb.metrics == nil {
+		return
+	}
+
+	lb.metrics.NodeFailedInc(node)
+
+	if ratio, err := lb.metrics.GetNodeFailedRatio(node); err == nil && ratio > lb.option.MaxNodeFailedRatio {
+		lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
+			lb.metrics.ResetNode(node)
+			lb.nodes.Exile(node)
+			if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
+				go fn(node)
+			}
+			nodes := lb.nodes.Get()
+			if len(nodes) <= 0 ||
+				math.Round(float64(lb.nodes.GetOriginalCount())*lb.option.MinHealthyNodeRatio) > float64(lb.nodes.GetCurrentCount()) {
+				<-lb.refresh()
+			} else {
+				lb.strategy.SetNodes(nodes)
+			}
+			return nil, nil
+		})
+	}
 }
 
 func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
@@ -96,6 +111,9 @@ func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
 			lb.ttlTimer.Reset(lb.option.TTL)
 		}
 
+		if lb.metrics != nil {
+			lb.metrics.ResetAllNodes()
+		}
 		lb.nodes.Set(lb.service.Nodes())
 		lb.strategy.SetNodes(lb.nodes.Get())
 		return nil, nil
