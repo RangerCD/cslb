@@ -84,6 +84,10 @@ func Test100RCSLBRandomFail(t *testing.T) {
 		srv,
 		stg,
 	)
+	randSlice := make([]bool, 0, 1000)
+	for i := 0; i < 1000; i++ {
+		randSlice = append(randSlice, rand.Intn(10) < 1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	// 100 concurrent read & 10% random fail
@@ -98,8 +102,7 @@ func Test100RCSLBRandomFail(t *testing.T) {
 				}
 				n, err := lb.Next()
 				assert.Nil(t, err)
-				atomic.AddUint64(&counter, 1)
-				if rand.Intn(10) < 1 {
+				if randSlice[atomic.AddUint64(&counter, 1)%1000] {
 					lb.NodeFailed(n)
 					atomic.AddUint64(&failedCounter, 1)
 				}
