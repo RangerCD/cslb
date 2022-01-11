@@ -6,7 +6,14 @@ import (
 	"unsafe"
 )
 
-// rrDNSService is for Round-robin DNS load balancing solution.
+type rrDNSService struct {
+	ipv4      bool
+	ipv6      bool
+	hostnames []string
+	nodes     unsafe.Pointer // Pointer to []*net.IPAddr
+}
+
+// NewRRDNSService is for Round-robin DNS load balancing solution.
 // Usually multiple A or AAAA records are associated with single hostname.
 // Node type: *net.IPAddr
 //
@@ -17,13 +24,6 @@ import (
 //     |- A 3.4.5.6
 //     ...
 // Everytime a client wants to send a request, one of these A records will be chosen to establish connection.
-type rrDNSService struct {
-	ipv4      bool
-	ipv6      bool
-	hostnames []string
-	nodes     unsafe.Pointer // Pointer to []*net.IPAddr
-}
-
 func NewRRDNSService(hostnames []string, ipv4 bool, ipv6 bool) *rrDNSService {
 	return &rrDNSService{
 		ipv4:      ipv4,

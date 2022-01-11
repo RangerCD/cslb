@@ -5,13 +5,13 @@ import (
 	"unsafe"
 )
 
-// staticService represents a simple static list of net.Addr
-// Node type: node.Node
 type staticService struct {
 	staticNodes []Node
 	nodes       unsafe.Pointer // Pointer to []node.Node
 }
 
+// NewStaticService represents a simple static list of Node
+// Node type: node.Node
 func NewStaticService(nodes []Node) *staticService {
 	return &staticService{
 		staticNodes: nodes,
