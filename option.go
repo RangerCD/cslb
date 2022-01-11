@@ -3,8 +3,6 @@ package cslb
 import (
 	"math"
 	"time"
-
-	"github.com/RangerCD/cslb/node"
 )
 
 const (
@@ -13,13 +11,18 @@ const (
 
 	HealthyNodeMustAll float64 = 1.0
 	HealthyNodeAny     float64 = 0.0
+
+	NodeFailedUnlimited float64 = 1.0
+	NodeFailedAny       float64 = 0.0
 )
 
 var (
 	DefaultLoadBalancerOption = LoadBalancerOption{
-		MaxNodeCount:        node.NodeCountUnlimited,
+		MaxNodeCount:        NodeCountUnlimited,
 		TTL:                 TTLUnlimited,
 		MinHealthyNodeRatio: HealthyNodeAny,
+		MaxNodeFailedRatio:  NodeFailedUnlimited,
+		MinSampleSize:       DefaultMinSampleSize,
 	}
 )
 
@@ -35,4 +38,10 @@ type LoadBalancerOption struct {
 
 	// Refresh when healthy node ratio is below MinHealthyNodeRatio
 	MinHealthyNodeRatio float64
+
+	// Node will be exiled if (failed / total) > MaxNodeFailedRatio
+	MaxNodeFailedRatio float64
+
+	// At least MinSampleSize times a node has been returned through Next(), this node can be count for exile.
+	MinSampleSize int
 }

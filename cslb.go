@@ -5,10 +5,6 @@ import (
 	"time"
 
 	"golang.org/x/sync/singleflight"
-
-	"github.com/RangerCD/cslb/node"
-	"github.com/RangerCD/cslb/service"
-	"github.com/RangerCD/cslb/strategy"
 )
 
 const (
@@ -17,16 +13,18 @@ const (
 )
 
 type LoadBalancer struct {
-	service  service.Service
-	strategy strategy.Strategy
+	service  Service
+	strategy Strategy
 	option   LoadBalancerOption
 
 	sf       *singleflight.Group
-	nodes    *node.Group
+	nodes    *Group
 	ttlTimer *time.Timer
+
+	metrics *Metrics
 }
 
-func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option ...LoadBalancerOption) *LoadBalancer {
+func NewLoadBalancer(service Service, strategy Strategy, option ...LoadBalancerOption) *LoadBalancer {
 	opt := DefaultLoadBalancerOption
 	if len(option) > 0 {
 		opt = option[0]
@@ -37,8 +35,9 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 		strategy: strategy,
 		option:   opt,
 		sf:       new(singleflight.Group),
-		nodes:    node.NewGroup(opt.MaxNodeCount),
+		nodes:    NewGroup(opt.MaxNodeCount),
 		ttlTimer: nil,
+		metrics:  NewMetrics(opt.MaxNodeFailedRatio, opt.MinSampleSize),
 	}
 	<-lb.refresh()
 
@@ -49,12 +48,12 @@ func NewLoadBalancer(service service.Service, strategy strategy.Strategy, option
 	return lb
 }
 
-func (lb *LoadBalancer) Next() (node.Node, error) {
-	next, err := lb.strategy.Next()
+func (lb *LoadBalancer) next(nextFunc func() (Node, error)) (Node, error) {
+	next, err := nextFunc()
 	if err != nil {
 		// Refresh and retry
 		<-lb.refresh()
-		next, err = lb.strategy.Next()
+		next, err = nextFunc()
 	}
 
 	// Check TTL
@@ -67,25 +66,47 @@ func (lb *LoadBalancer) Next() (node.Node, error) {
 		}
 	}
 
+	if lb.metrics != nil {
+		lb.metrics.NodeInc(next)
+	}
+
 	return next, err
 }
 
-func (lb *LoadBalancer) NodeFailed(node node.Node) {
-	lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
-		// TODO: allow fail several times before exile
-		lb.nodes.Exile(node)
-		if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
-			go fn(node)
-		}
-		nodes := lb.nodes.Get()
-		if len(nodes) <= 0 ||
-			math.Round(float64(lb.nodes.GetOriginalCount())*lb.option.MinHealthyNodeRatio) > float64(lb.nodes.GetCurrentCount()) {
-			<-lb.refresh()
-		} else {
-			lb.strategy.SetNodes(nodes)
-		}
-		return nil, nil
+func (lb *LoadBalancer) Next() (Node, error) {
+	return lb.next(lb.strategy.Next)
+}
+
+func (lb *LoadBalancer) NextFor(input interface{}) (Node, error) {
+	return lb.next(func() (Node, error) {
+		return lb.strategy.NextFor(input)
 	})
+}
+
+func (lb *LoadBalancer) NodeFailed(node Node) {
+	if lb.metrics == nil {
+		return
+	}
+
+	lb.metrics.NodeFailedInc(node)
+
+	if ratio, err := lb.metrics.GetNodeFailedRatio(node); err == nil && ratio > lb.option.MaxNodeFailedRatio {
+		lb.sf.Do(NodeFailedKey+node.String(), func() (interface{}, error) {
+			lb.metrics.ResetNode(node)
+			lb.nodes.Exile(node)
+			if fn := lb.service.NodeFailedCallbackFunc(); fn != nil {
+				go fn(node)
+			}
+			nodes := lb.nodes.Get()
+			if len(nodes) <= 0 ||
+				math.Round(float64(lb.nodes.GetOriginalCount())*lb.option.MinHealthyNodeRatio) > float64(lb.nodes.GetCurrentCount()) {
+				<-lb.refresh()
+			} else {
+				lb.strategy.SetNodes(nodes)
+			}
+			return nil, nil
+		})
+	}
 }
 
 func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
@@ -100,6 +121,9 @@ func (lb *LoadBalancer) refresh() <-chan singleflight.Result {
 			lb.ttlTimer.Reset(lb.option.TTL)
 		}
 
+		if lb.metrics != nil {
+			lb.metrics.ResetAllNodes()
+		}
 		lb.nodes.Set(lb.service.Nodes())
 		lb.strategy.SetNodes(lb.nodes.Get())
 		return nil, nil

@@ -1,4 +1,4 @@
-package strategy
+package cslb
 
 import (
 	"log"
@@ -8,13 +8,11 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/RangerCD/cslb/node"
 )
 
 func TestRoundRobin(t *testing.T) {
 	s := roundRobinStrategy{}
-	s.SetNodes([]node.Node{
+	s.SetNodes([]Node{
 		&net.IPAddr{IP: net.IPv4(1, 2, 3, 4)},
 		&net.IPAddr{IP: net.IPv4(2, 3, 4, 5)},
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
@@ -31,7 +29,7 @@ func TestRoundRobin(t *testing.T) {
 func Test4R4WRoundRobin(t *testing.T) {
 	rand.Seed(0)
 	s := roundRobinStrategy{}
-	s.SetNodes([]node.Node{
+	s.SetNodes([]Node{
 		&net.IPAddr{IP: net.IPv4(1, 2, 3, 4)},
 		&net.IPAddr{IP: net.IPv4(2, 3, 4, 5)},
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
@@ -52,7 +50,7 @@ func Test4R4WRoundRobin(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		go func() {
 			for {
-				s.SetNodes([]node.Node{
+				s.SetNodes([]Node{
 					&net.IPAddr{IP: net.IPv4(1, 2, 3, byte(rand.Intn(256)))},
 					&net.IPAddr{IP: net.IPv4(2, 3, 4, byte(rand.Intn(256)))},
 					&net.IPAddr{IP: net.IPv4(3, 4, 5, byte(rand.Intn(256)))},
@@ -67,7 +65,7 @@ func Test4R4WRoundRobin(t *testing.T) {
 
 func BenchmarkRoundRobin(b *testing.B) {
 	s := roundRobinStrategy{}
-	s.SetNodes([]node.Node{
+	s.SetNodes([]Node{
 		&net.IPAddr{IP: net.IPv4(1, 2, 3, 4)},
 		&net.IPAddr{IP: net.IPv4(2, 3, 4, 5)},
 		&net.IPAddr{IP: net.IPv4(3, 4, 5, 6)},
