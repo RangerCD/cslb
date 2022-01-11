@@ -48,12 +48,12 @@ func NewLoadBalancer(service Service, strategy Strategy, option ...LoadBalancerO
 	return lb
 }
 
-func (lb *LoadBalancer) Next() (Node, error) {
-	next, err := lb.strategy.Next()
+func (lb *LoadBalancer) next(nextFunc func() (Node, error)) (Node, error) {
+	next, err := nextFunc()
 	if err != nil {
 		// Refresh and retry
 		<-lb.refresh()
-		next, err = lb.strategy.Next()
+		next, err = nextFunc()
 	}
 
 	// Check TTL
@@ -71,6 +71,16 @@ func (lb *LoadBalancer) Next() (Node, error) {
 	}
 
 	return next, err
+}
+
+func (lb *LoadBalancer) Next() (Node, error) {
+	return lb.next(lb.strategy.Next)
+}
+
+func (lb *LoadBalancer) NextFor(input interface{}) (Node, error) {
+	return lb.next(func() (Node, error) {
+		return lb.strategy.NextFor(input)
+	})
 }
 
 func (lb *LoadBalancer) NodeFailed(node Node) {

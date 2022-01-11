@@ -32,3 +32,7 @@ func (s *roundRobinStrategy) Next() (Node, error) {
 		return nil, errors.New("empty node list")
 	}
 }
+
+func (s *roundRobinStrategy) NextFor(interface{}) (Node, error) {
+	return s.Next()
+}

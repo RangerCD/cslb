@@ -7,4 +7,6 @@ type Strategy interface {
 	SetNodes(nodes []Node)
 	// Next returns a node address
 	Next() (Node, error)
+	// NextFor returns a node address assigned to request
+	NextFor(interface{}) (Node, error)
 }
