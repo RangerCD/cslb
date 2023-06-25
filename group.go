@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	NodeCountUnlimited = math.MaxInt64
+	NodeCountUnlimited = math.MaxInt
 )
 
 type Group struct {
