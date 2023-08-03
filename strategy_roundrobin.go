@@ -33,6 +33,9 @@ func (s *roundRobinStrategy) SetNodes(nodes []Node) {
 	for i := 0; i < len(internalNodes.order); i++ {
 		internalNodes.order[i] = i
 	}
+	rand.Shuffle(len(internalNodes.order), func(i, j int) {
+		internalNodes.order[i], internalNodes.order[j] = internalNodes.order[j], internalNodes.order[i]
+	})
 	atomic.StorePointer(&s.internalNodes, unsafe.Pointer(internalNodes))
 }
 
