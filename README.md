@@ -12,7 +12,7 @@ Client-Side Load Balancer
   - [x] Static Node List
 - [ ] Multiple distributing strategies
   - [x] Round-Robin
-  - [ ] Weighted Round-Robin
+  - [x] Weighted Round-Robin
   - [x] Hashed
 - [x] Exile unhealthy node
 - [x] Node list TTL 
